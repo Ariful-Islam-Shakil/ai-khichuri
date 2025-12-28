@@ -21,3 +21,7 @@ pip install uv
 ```bash
 uv pip install -r requirements.txt
 ```
+## MongoDB database setup
+```bash
+python -m pip install "pymongo[srv]==3.12"
+```
