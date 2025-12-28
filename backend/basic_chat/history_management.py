@@ -132,6 +132,37 @@ def save_message_to_conversation(
     return result.matched_count == 1
 
 
+def delete_conversation(
+    user_name: str,
+    conversation_id: str,
+    collection: Collection
+) -> bool:
+    """
+    Deletes a single conversation from a user's conversation list.
+    """
+    result = collection.update_one(
+        {"user_name": user_name},
+        {"$pull": {"conversations": {"conversation_id": conversation_id}}}
+    )
+
+    return result.modified_count == 1
+
+
+def delete_all_conversations(
+    user_name: str,
+    collection: Collection
+) -> bool:
+    """
+    Deletes all conversations for a user.
+    """
+    result = collection.update_one(
+        {"user_name": user_name},
+        {"$set": {"conversations": []}}
+    )
+
+    return result.modified_count == 1
+
+
 # -----------------------------
 # Main function for testing
 # -----------------------------
@@ -166,6 +197,12 @@ def main():
     )
 
     print("Messages saved successfully ✅")
+
+    # Delete single conversation
+    # delete_conversation(user_name, conversation_id, collection)
+
+    # Delete all conversations
+    # delete_all_conversations(user_name, collection)
 
 
 if __name__ == "__main__":
