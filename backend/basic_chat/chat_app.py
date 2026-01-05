@@ -1,4 +1,7 @@
 import streamlit as st
+import os
+from dotenv import load_dotenv
+
 from langchain.messages import SystemMessage, HumanMessage, AIMessage
 from backend.basic_chat.history_management import (
     get_mongodb_collection,
@@ -8,21 +11,13 @@ from backend.basic_chat.history_management import (
     get_conversation_history,
     update_title,
     create_new_chat,
+    get_current_chat_title,
+    delete_conversation
 )
 from backend.basic_chat.chat_model import get_chat_model
 
+load_dotenv()
 
-def get_current_chat_title(user_name, conversation_id, collection):
-    doc = collection.find_one(
-        {
-            "user_name": user_name,
-            "conversations.conversation_id": conversation_id
-        },
-        {"conversations.$": 1}
-    )
-    if doc and "conversations" in doc:
-        return doc["conversations"][0].get("title", "")
-    return ""
 
 
 def chat_interface(st):
@@ -64,51 +59,54 @@ def chat_interface(st):
             "mixtral-8x7b-32768"
         ],
         "gemini": [
-            "gemini-1.5-flash",
+            "gemini-2.5-flash",
             "gemini-1.5-pro",
             "gemini-1.0-pro"
         ],
         "huggingface": [
-            "mistralai/Mistral-7B-Instruct-v0.2",
+            "openai/gpt-oss-20b",
             "meta-llama/Llama-2-7b-chat-hf",
             "tiiuae/falcon-7b-instruct"
         ]
     }
 
-    col1, col2, col3 = st.columns(3)
+    with st.expander("🤖 Model Configuration"):
+        col1, col2, col3 = st.columns(3)
 
-    with col1:
-        provider = st.selectbox("Provider", list(provider_models.keys()))
+        with col1:
+            provider = st.selectbox("Provider", list(provider_models.keys()))
 
-    with col2:
-        model_name = st.selectbox("Model", provider_models[provider])
+        with col2:
+            model_name = st.selectbox("Model", provider_models[provider])
 
-    with col3:
-        temperature = st.slider("Temperature", 0.0, 1.0, 0.3)
+        with col3:
+            temperature = st.slider("Temperature", 0.0, 1.0, 0.3)
 
     # -------------------------------
-    # API Key
+    # API Key (from .env)
     # -------------------------------
-    api_key = st.text_input(f"{provider.upper()} API Key", type="password")
+    PROVIDER_KEY_MAP = {
+        "groq": "GROQ_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "huggingface": "HF_TOKEN",
+    }
+
+    env_key_name = PROVIDER_KEY_MAP.get(provider)
+    api_key = os.getenv(env_key_name)
 
     if not api_key:
-        st.warning("Please enter API key to continue")
+        st.error(
+            f"{env_key_name} not found in .env file. "
+            f"Please set it before continuing."
+        )
         return
 
     # -------------------------------
     # Conversation Setup
     # -------------------------------
     if "conversation_id" not in st.session_state:
-        conv_id = create_new_chat(
-            user_name=st.session_state.user_name,
-            collection=collection,
-            title="New Chat",
-            system_prompt="You are a helpful assistant."
-        )
-        st.session_state.conversation_id = conv_id
-        st.session_state.messages = [
-            SystemMessage(content="You are a helpful assistant.")
-        ]
+        st.session_state.conversation_id = ""
+        st.session_state.messages = []
 
     # -------------------------------
     # Sidebar – Chat List
@@ -116,7 +114,7 @@ def chat_interface(st):
     with st.sidebar:
         st.header("💬 Chats")
 
-        if st.button("➕ New Chat"):
+        if st.button("➕ New Chat", use_container_width=True):
             conv_id = create_new_chat(
                 user_name=st.session_state.user_name,
                 collection=collection,
@@ -137,17 +135,46 @@ def chat_interface(st):
         )
 
         for chat in chat_titles:
-            if st.button(
-                chat["title"] or "Untitled Chat",
-                key=chat["conversation_id"]
-            ):
-                st.session_state.conversation_id = chat["conversation_id"]
-                st.session_state.messages = get_conversation_history(
-                    user_name=st.session_state.user_name,
-                    conversation_id=chat["conversation_id"],
-                    collection=collection
-                )
-                st.rerun()
+            chat_id = chat["conversation_id"]
+            chat_title = chat["title"] or "Untitled Chat"
+
+            is_active = chat_id == st.session_state.conversation_id
+
+            col1, col2 = st.columns([5, 1])
+
+            # 🔵 Active chat highlight
+            with col1:
+                btn_label = f"▶ {chat_title}" if is_active else chat_title
+
+                if st.button(
+                    btn_label,
+                    key=f"open_{chat_id}",
+                    use_container_width=True,
+                    type="primary" if is_active else "secondary"
+                ):
+                    st.session_state.conversation_id = chat_id
+                    st.session_state.messages = get_conversation_history(
+                        user_name=st.session_state.user_name,
+                        conversation_id=chat_id,
+                        collection=collection
+                    )
+                    st.rerun()
+
+            # 🗑️ Delete button
+            with col2:
+                if st.button("🗑️", key=f"delete_{chat_id}"):
+                    delete_conversation(
+                        user_name=st.session_state.user_name,
+                        conversation_id=chat_id,
+                        collection=collection
+                    )
+
+                    # If deleted chat was active → reset
+                    if is_active:
+                        st.session_state.pop("conversation_id", None)
+                        st.session_state.pop("messages", None)
+
+                    st.rerun()
 
     # -------------------------------
     # Chat Title Edit
@@ -157,23 +184,27 @@ def chat_interface(st):
         st.session_state.conversation_id,
         collection
     )
+    st.session_state.current_title = current_title
 
-    new_title = st.text_input(
-        "✏️ Chat Title",
-        value=current_title,
-        placeholder="Rename this chat"
-    )
+    with st.expander("Edit Chat Title"):
+        new_title = st.text_input(
+            "✏️ Chat Title",
+            value=st.session_state.current_title,
+            # placeholder="Rename this chat",
+            key="chat_title_input"
+        )
 
-    if st.button("Update Title"):
-        if new_title.strip():
-            update_title(
-                user_name=st.session_state.user_name,
-                conversation_id=st.session_state.conversation_id,
-                title=new_title.strip(),
-                collection=collection
-            )
-            st.success("Title updated")
-            st.rerun()
+        if st.button("Update Title", use_container_width=True):
+            if new_title.strip() and new_title != current_title:
+                update_title(
+                    user_name=st.session_state.user_name,
+                    conversation_id=st.session_state.conversation_id,
+                    title=new_title.strip(),
+                    collection=collection
+                )
+                st.success("Title updated")
+                st.rerun()
+
 
     # -------------------------------
     # Display Chat History

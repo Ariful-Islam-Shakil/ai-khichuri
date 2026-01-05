@@ -186,7 +186,17 @@ def get_chat_titles(
         }
         for conv in user_doc["conversations"]
     ]
-
+def get_current_chat_title(user_name, conversation_id, collection):
+    doc = collection.find_one(
+        {
+            "user_name": user_name,
+            "conversations.conversation_id": conversation_id
+        },
+        {"conversations.$": 1}
+    )
+    if doc and "conversations" in doc:
+        return doc["conversations"][0].get("title", "")
+    return ""
 
 def update_title(
     user_name: str,
