@@ -6,3 +6,4 @@ dotenv
 pymongo 
 python-dotenv
 streamlit
+diffusers
