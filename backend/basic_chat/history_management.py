@@ -49,9 +49,11 @@ def convert_dict_to_conversation(messages_dict: List[Dict]) -> List:
     Convert stored message dictionaries back to LangChain message objects.
     """
     conversation = []
+    if not messages_dict:
+        return conversation
     for msg in messages_dict:
-        role = msg.get("role")
-        content = msg.get("content", "")
+        role = msg["role"]
+        content = msg["content"]
 
         if role == "system":
             conversation.append(SystemMessage(content=content))
@@ -82,18 +84,21 @@ def create_user(user_name: str, collection: Collection) -> bool:
 def create_new_chat(
     user_name: str,
     collection: Collection,
-    title: str = "",
-    system_prompt: str = ""
+    title: str = '',
+    system_prompt: str = "You are a helpful assistant. Answer like a professional human being and precisely."
 ) -> str:
     """
     Create a new conversation for a user and return conversation_id.
     """
+    if not title:
+        title = f"Hello! Mr. {user_name}! How can I Help you? "
     conversation = {
         "conversation_id": os.urandom(16).hex(),
-        "title": title,
-        "system_prompt": system_prompt,
+        "title": title, 
         "created_at": datetime.utcnow(),
-        "messages": []
+        "messages": [
+            {"role": "system", "content": system_prompt}
+        ]
     }
 
     result = collection.update_one(
@@ -106,30 +111,132 @@ def create_new_chat(
 
     return conversation["conversation_id"]
 
-
-def save_message_to_conversation(
+def update_system_prompt(
     user_name: str,
     conversation_id: str,
-    message: Dict,
+    system_prompt: str,
     collection: Collection
 ) -> bool:
     """
-    Append a message to an existing conversation.
-    Returns True if successful, False otherwise.
+    Update the system prompt for a conversation.
+    This updates the existing system message (index 0).
     """
-    message["timestamp"] = datetime.utcnow()
-
     result = collection.update_one(
         {
             "user_name": user_name,
             "conversations.conversation_id": conversation_id
         },
         {
-            "$push": {"conversations.$.messages": message}
+            "$set": {
+                "conversations.$.messages.0.content": system_prompt
+            }
         }
     )
 
-    return result.matched_count == 1
+    return result.modified_count == 1
+
+
+def save_message_to_conversation(
+    user_name: str,
+    conversation_id: str,
+    messages: List,
+    collection: Collection
+) -> bool:
+    """
+    Replace the entire messages list of a conversation.
+    """
+    result = collection.update_one(
+        {
+            "user_name": user_name,
+            "conversations.conversation_id": conversation_id
+        },
+        {
+            "$set": {
+                "conversations.$.messages": convert_conversation_to_dict(messages)
+            }
+        }
+    )
+
+    return result.modified_count == 1
+
+def get_chat_titles(
+    user_name: str,
+    collection: Collection
+) -> List[Dict]:
+    """
+    Returns a list of conversation IDs and titles for a user.
+    Output format:
+    [
+        {"conversation_id": "...", "title": "..."},
+        ...
+    ]
+    """
+    user_doc = collection.find_one(
+        {"user_name": user_name},
+        {"conversations.conversation_id": 1, "conversations.title": 1}
+    )
+
+    if not user_doc or "conversations" not in user_doc:
+        return []
+
+    return [
+        {
+            "conversation_id": conv.get("conversation_id", ""),
+            "title": conv.get("title", "")
+        }
+        for conv in user_doc["conversations"]
+    ]
+
+
+def update_title(
+    user_name: str,
+    conversation_id: str,
+    title: str,
+    collection: Collection
+) -> bool:
+    """
+    Update the title of a specific conversation.
+    Returns True if updated successfully.
+    """
+    result = collection.update_one(
+        {
+            "user_name": user_name,
+            "conversations.conversation_id": conversation_id
+        },
+        {
+            "$set": {"conversations.$.title": title}
+        }
+    )
+
+    return result.modified_count == 1
+
+
+
+def get_conversation_history(
+    user_name: str,
+    conversation_id: str,
+    collection: Collection
+) -> List:
+    user_doc = collection.find_one(
+        {
+            "user_name": user_name,
+            "conversations.conversation_id": conversation_id
+        },
+        {
+            "conversations.$": 1
+        }
+    )
+
+    if not user_doc or "conversations" not in user_doc:
+        return []
+
+    conversation = user_doc["conversations"][0]
+    messages = conversation.get("messages", [])
+
+    if not isinstance(messages, list):
+        return []
+
+    return convert_dict_to_conversation(messages)
 
 
 def delete_conversation(
@@ -197,6 +304,14 @@ def main():
     )
 
     print("Messages saved successfully ✅")
+
+    history = get_conversation_history(
+        user_name="test_user",
+        conversation_id=conversation_id,
+        collection=collection
+    )
+
+    print(history)
 
     # Delete single conversation
     # delete_conversation(user_name, conversation_id, collection)

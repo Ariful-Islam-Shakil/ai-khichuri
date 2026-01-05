@@ -5,3 +5,4 @@ langchain-huggingface
 dotenv
 pymongo 
 python-dotenv
+streamlit

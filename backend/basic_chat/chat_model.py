@@ -41,7 +41,9 @@ def get_chat_model(
         raise ValueError("Unsupported provider")
 def get_response_from_model(
         model,
-        conversation,
+        conversation
         ):
+    
     response = model.invoke(conversation)
-    return response.content
+    conversation.append({"role": "assistant", "content": response.content})
+    return conversation, conversation[-1]["content"]
