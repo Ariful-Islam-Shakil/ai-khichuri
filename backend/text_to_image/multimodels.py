@@ -49,6 +49,17 @@ def query_rewrite(query: str) -> str:
     
     return rewritten_query
 
+def generate_image(query, pipeline):
+    
+    rewritten_query = query_rewrite(query)
+    result = pipeline(rewritten_query)
+
+    # For Stable Diffusion / Diffusers pipelines
+    image = result.images[0]
+    path = f"/Users/mdarifulislamshakil/MyProjects/ai-khichuri/backend/text_to_image/outputs/generated_images/{os.urandom(16).hex()}.jpg"
+    image.save(path)
+    
+    return image, path
 
 if __name__ == "__main__":
     user_query = "a beautifull flower garden, bee, birds and so on"
