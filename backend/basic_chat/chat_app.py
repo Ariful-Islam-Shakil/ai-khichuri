@@ -112,7 +112,7 @@ def chat_interface(st):
     # Sidebar – Chat List
     # -------------------------------
     with st.sidebar:
-        st.header("💬 Chats")
+        st.header(f"💬 Chats : Logged in as {st.session_state.user_name}")
 
         if st.button("➕ New Chat", use_container_width=True):
             conv_id = create_new_chat(
@@ -133,7 +133,7 @@ def chat_interface(st):
             st.session_state.user_name,
             collection
         )
-
+        st.subheader("Chats history")
         for chat in chat_titles:
             chat_id = chat["conversation_id"]
             chat_title = chat["title"] or "Untitled Chat"
