@@ -1,5 +1,6 @@
 import os
 import torch
+import json
 from langchain_groq import ChatGroq
 from diffusers import DiffusionPipeline
 from dotenv import load_dotenv
@@ -48,6 +49,19 @@ def query_rewrite(query: str) -> str:
     rewritten_query = response.content
     
     return rewritten_query
+def load_history(history_path: str):
+    if os.path.exists(history_path):
+        try:
+            with open(history_path, "r") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_history(history, history_path: str):
+    os.makedirs(os.path.dirname(history_path), exist_ok=True)
+    with open(history_path, "w") as f:
+        json.dump(history, f, indent=2)
 
 def generate_image(query, pipeline):
     
@@ -56,10 +70,19 @@ def generate_image(query, pipeline):
 
     # For Stable Diffusion / Diffusers pipelines
     image = result.images[0]
-    path = f"/Users/mdarifulislamshakil/MyProjects/ai-khichuri/backend/text_to_image/outputs/generated_images/{os.urandom(16).hex()}.jpg"
-    image.save(path)
+    image_path = f"/Users/mdarifulislamshakil/MyProjects/ai-khichuri/backend/text_to_image/outputs/generated_images/{os.urandom(16).hex()}.jpg"
+    history_path = "/Users/mdarifulislamshakil/MyProjects/ai-khichuri/backend/text_to_image/outputs/generated_image_metadata.json"
+    image.save(image_path)
+    new_object = {
+        "path": image_path,
+        "query": query,
+        "refined_query" : rewritten_query
+    }
+    history = load_history(history_path)
+    history.append(new_object)
+    save_history(history, history_path)
     
-    return image, path
+    return history
 
 if __name__ == "__main__":
     user_query = "a beautifull flower garden, bee, birds and so on"

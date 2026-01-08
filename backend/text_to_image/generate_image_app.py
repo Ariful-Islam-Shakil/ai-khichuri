@@ -5,10 +5,8 @@ import os
 from backend.text_to_image.multimodels import get_model_pipeline, generate_image
 
 # ---- Metadata file path ----
-METADATA_PATH = (
-    "/Users/mdarifulislamshakil/MyProjects/ai-khichuri/"
-    "backend/text_to_image/outputs/generated_image_metada.json"
-)
+METADATA_PATH = "backend/text_to_image/outputs/generated_image_metadata.json"
+# output_image_dir = "/Users/mdarifulislamshakil/MyProjects/ai-khichuri/backend/text_to_image/outputs/generated_images"
 
 
 # ---- Helper functions ----
@@ -36,7 +34,7 @@ def generate_image_interface(st):
     # ---- Session State Init (ONLY ONCE) ----
     if "images" not in st.session_state:
         st.session_state.images = load_image_history()
-
+        print("images loaded : ", len(st.session_state.images))
     if "pipeline" not in st.session_state:
         st.session_state.pipeline = get_model_pipeline()
 
@@ -54,17 +52,7 @@ def generate_image_interface(st):
             st.warning("Please enter a prompt.")
         else:
             with st.spinner("Generating image..."):
-                path = generate_image(query, st.session_state.pipeline)
-
-            new_entry = {
-                "path": path,
-                "query": query
-            }
-
-            # ✅ Prevent accidental duplicates
-            if new_entry not in st.session_state.images:
-                st.session_state.images.append(new_entry)
-                save_image_history(st.session_state.images)
+               st.session_state.images = generate_image(query, st.session_state.pipeline)
 
             st.success("Image generated successfully!")
 
@@ -77,7 +65,22 @@ def generate_image_interface(st):
         for idx, item in enumerate(reversed(st.session_state.images), start=1):
             with st.container():
                 st.markdown(f"**Prompt {idx}:** {item['query']}")
+                st.markdown(f"**Refined Prompt {idx}:** {item['refined_query']}")
                 st.image(item["path"], width=300)  # ✅ Smaller image
+                col1,col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        label="Download Image",
+                        data=item["path"],
+                        file_name=f"image_{idx}.png",
+                        mime="image/png"
+                    )
+                with col2:
+                    re_generate = st.button("Re-Generate", key=f"re_generate_{idx}")
+                    if re_generate:
+                        with st.spinner("Re-generating image..."):
+                            st.session_state.images = generate_image(item["query"], st.session_state.pipeline)
+                            st.rerun()
                 st.divider()
     else:
         st.info("No images generated yet.")
