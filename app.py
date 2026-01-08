@@ -2,6 +2,7 @@ import streamlit as st
 
 from backend.basic_chat.chat_app import chat_interface
 from backend.text_to_image.generate_image_app import generate_image_interface
+from backend.pdf_to_text.pdf_services_app import pdf_chat_interface
 
 
 def main():
@@ -22,7 +23,7 @@ def main():
                 "💬 Chat Assistant",
                 "🖼️ Text to Image",
                 # Future features here
-                # "📄 PDF Chat",
+                "📄 PDF Chat",
                 # "🎥 Video Generator",
                 # "🧠 Agents"
             ]
@@ -37,6 +38,8 @@ def main():
 
     elif feature == "🖼️ Text to Image":
         generate_image_interface(st)
+    elif feature == "📄 PDF Chat":
+        pdf_chat_interface(st)
 
 
 if __name__ == "__main__":

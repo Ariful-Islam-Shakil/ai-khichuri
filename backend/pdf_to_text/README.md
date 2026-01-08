@@ -1,0 +1,13 @@
+# PDF to Text
+- upload pdf or image
+- save them to input folder
+- define input path and output path based on file name
+- if file name already exists keep with 1,2...
+- read the files
+- process them
+  - regular python text extractor
+  - OCR
+    - Convert to image
+    - extract text from image
+- save them to output folder
+- show the output in the UI
